@@ -278,16 +278,19 @@
   /* ==== スニダンPSA v3: 列を盤面いっぱいに広げて画像を実際に大きくする ==== */
   /* 原因=列幅が固定(例:g3=300px)で盤面(内側1024px)より狭く、画像が横幅で頭打ち。
      列を1frにして横幅を最大化し、画像高さは自動で追従させて余白を無くす。 */
-  .grid.g1{grid-template-columns:1fr !important}
-  .grid.g2{grid-template-columns:repeat(2,1fr) !important}
-  .grid.g3{grid-template-columns:repeat(3,1fr) !important}
-  .grid.g4{grid-template-columns:repeat(4,1fr) !important}
-  .grid.g5{grid-template-columns:repeat(5,1fr) !important}
-  .grid.g6{grid-template-columns:repeat(6,1fr) !important}
-  .grid.g7{grid-template-columns:repeat(7,1fr) !important}
-  .grid.g8{grid-template-columns:repeat(8,1fr) !important}
-  .grid.g9{grid-template-columns:repeat(9,1fr) !important}
-  .cell{ padding:8px 4px 16px !important; }
+  /* minmax(0,1fr) にして、長い金額でも列が盤面幅を超えないようにする(はみ出し防止) */
+  .grid{ width:100% !important; max-width:100% !important; margin:0 !important; justify-content:stretch !important; }
+  .grid.g1{grid-template-columns:minmax(0,1fr) !important}
+  .grid.g2{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .grid.g3{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+  .grid.g4{grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+  .grid.g5{grid-template-columns:repeat(5,minmax(0,1fr)) !important}
+  .grid.g6{grid-template-columns:repeat(6,minmax(0,1fr)) !important}
+  .grid.g7{grid-template-columns:repeat(7,minmax(0,1fr)) !important}
+  .grid.g8{grid-template-columns:repeat(8,minmax(0,1fr)) !important}
+  .grid.g9{grid-template-columns:repeat(9,minmax(0,1fr)) !important}
+  .cell{ padding:8px 4px 16px !important; min-width:0 !important; overflow:visible !important; }
+  .nm,.pr{ max-width:100% !important; }
   /* imgbox をカードの縦横比(5:7)の箱にし、列幅いっぱいに広げる。
      画像は箱いっぱい(contain)で、列が広いほど画像も大きくなる。
      max-height は段数が多い時に盤面からはみ出さないための保険。 */
