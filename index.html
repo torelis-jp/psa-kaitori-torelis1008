@@ -389,7 +389,7 @@
   .epsub{flex-wrap:wrap; row-gap:6px}
   .epprice:focus{outline:3px solid rgba(237,200,94,.3); outline-offset:1px; border-color:#f4d36e!important}
   /* 買取表の価格を太く読みやすく。明るい縁取りで背景から浮かせる */
-  .pr{font-family:"Arial Black","Noto Sans JP",sans-serif!important; font-weight:900!important; letter-spacing:-.025em; color:#fff9e8!important; -webkit-text-stroke:1.4px #241707; paint-order:stroke fill; text-shadow:0 2px 3px rgba(0,0,0,.85); background:linear-gradient(180deg,#f5d878,#dcae35)!important; border:2px solid #fff0b8; border-radius:10px!important; box-shadow:0 3px 8px rgba(0,0,0,.45)!important; padding:3px 12px!important;}
+  .pr{font-family:"Arial Black","Noto Sans JP",sans-serif!important; font-weight:900!important; letter-spacing:-.025em; color:#fff9e8!important; -webkit-text-stroke:1.4px #241707; paint-order:stroke fill; text-shadow:0 2px 3px rgba(0,0,0,.85); background:#e9c04a!important; background-image:none!important; border:2px solid #fff0b8; border-radius:10px!important; box-shadow:0 3px 8px rgba(0,0,0,.45)!important; padding:3px 12px!important;}
   .pr .y{color:#fff9e8!important; -webkit-text-stroke:1px #241707; paint-order:stroke fill;}
   @media(max-width:600px){#editPanel{width:100%}.epprice{width:108px!important;min-width:108px}}
 
@@ -402,11 +402,11 @@
   /* ==== 金額バナー: 画面はグラデ、出力(html2canvas)は単色金で確実に塗る ==== */
   /* html2canvas 1.4.1 はグラデ(特に background-size 指定時)を黒く描くことがあるため、
      出力時だけ単色の金にする。単色は html2canvas が確実に塗れるのでバナーが崩れない。 */
-  .grid .pr{ background-color:#e9c35a !important; }  /* 画面でも下地に金（保険） */
-  body.exporting .grid .pr{
-    background:#e9c35a !important;
+  /* 金額バナーは全面フラットな単色金（グラデ廃止）。画面・画像保存とも二色化しない。 */
+  .pr, .grid .pr, body.exporting .grid .pr{
+    background:#e9c04a !important;
     background-image:none !important;
-    background-color:#e9c35a !important;
+    background-color:#e9c04a !important;
   }
 
   /* ==== スニダンPSA v3: 列を盤面いっぱいに広げ画像を大きく / はみ出し防止 ==== */
@@ -497,7 +497,7 @@
       <div class="epHead">編集リスト <span id="epCount"></span></div>
       <button id="epRefresh" onclick="refreshPrices()">最安値を更新（スニダン）</button>
       <button id="epComp" onclick="refreshComp()">競合買取を更新（シンソク/トレカバース）</button>
-      <label class="compToggle"><input type="checkbox" id="compAdjustChk" checked onchange="toggleCompAdjust(this)"> 競合に応じて掛け率を自動調整（上げ+3% / 競合がスニダン最安比10%以上安いと下げ=中間）</label>
+      <label class="compToggle"><input type="checkbox" id="compAdjustChk" checked onchange="toggleCompAdjust(this)"> 競合に応じて掛け率を自動調整（100万以上=競合×1.03統一 / 未満=上げ+3%・最安比10%安で下げ中間）</label>
       <button id="epCopy" onclick="copyForX()">Xポスト用にコピー</button>
       <div id="epList"></div>
       <div class="epHint">並べ替えはプレビュー上の⠿をドラッグ</div>
@@ -555,6 +555,7 @@
   var COMP_DOWN=true;            // 下げ調整を行うか
   var COMP_DOWN_GAP=0.10;        // 下げ発動: 競合が「スニダン最安値」より これ以上安い（10%以上乖離）時
   // 下げ先は「自店base と 競合(高い方) の中間」→ その金額に対応する掛け率(1%刻み)を自動選択
+  var COMP_HI=1000000;           // スニダン最安値がこの額以上のカードは、常に競合×1.03に統一
   // 型番トークン正規化（SNKRDUNK「SM-P 397」も競合「397/SM-P」も同じキーに）
   function normTok(s){
     if(!s) return '';
@@ -585,7 +586,11 @@
     var mg=(it.margin!=null?it.margin:0.94);
     var base=roundBuy(it.min*mg); it.base=base;
     var comp=COMP_ADJUST? compBest(it) : 0;
-    if(comp>0 && comp>base){
+    if(comp>0 && it.min>=COMP_HI){
+      // 100万円以上(スニダン最安値基準)のカード: 上げ下げに関わらず 競合×1.03 に統一
+      var rh=snapUp(comp*COMP_UP/it.min);
+      it.buy=roundBuy(it.min*rh); it.adjusted=true; it.adjDir=(it.buy<base?'down':'up'); it.effMargin=rh;
+    } else if(comp>0 && comp>base){
       // 上げ: 競合より高く（+3%）→ 対応する掛け率を自動選択
       var ru=snapUp(comp*COMP_UP/it.min);
       it.buy=roundBuy(it.min*ru); it.adjusted=true; it.adjDir='up'; it.effMargin=ru;
