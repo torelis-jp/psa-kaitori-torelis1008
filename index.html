@@ -263,6 +263,12 @@
   .epref{ font-size:11px; color:#8fd0ff; min-width:70px; }
   .epx2{ color:#888; font-size:11px; }
   .epmargin{ width:66px; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 5px; font-size:12px; text-align:center; font-family:inherit; }
+  /* 競合買取の表示 */
+  #epComp{ display:block; width:100%; margin-bottom:6px; background:#2b4a7a; color:#fff; border:0; border-radius:9px; min-height:40px; font-weight:700; cursor:pointer; }
+  #epComp:hover{ background:#35599a; } #epComp:disabled{ opacity:.6; cursor:default; }
+  .compToggle{ display:flex; align-items:center; gap:6px; font-size:12px; color:#cfe0ff; margin:0 2px 10px; cursor:pointer; }
+  .epsub2{ display:flex; align-items:center; gap:8px; margin-top:2px; font-size:11px; }
+  .epcomp{ color:#8fd0ff; } .epcomp.none{ color:#777; } .epcomp.adj{ color:#ffd27a; font-weight:700; } .epcomp.adj.down{ color:#ff9a6a; }
   .epprice{ width:78px !important; }
 
   /* === UI refresh: layout and controls only; application logic remains unchanged === */
@@ -392,6 +398,19 @@
   .grid .pr{-webkit-text-stroke:3px #241707!important; text-shadow:0 2px 3px rgba(0,0,0,.95), 0 0 2px #241707!important;}
   .grid .pr .y{-webkit-text-stroke:2.2px #241707!important;}
 
+  /* ==== 金額バナー: 出力(html2canvas)でグラデが途中で切れる対策 ==== */
+  /* 金色の単色を下地に敷き、その上からグラデを全面(100% 100%)で重ねる。
+     万一グラデ描画が途中で止まっても下地の金色が出るので暗くならない。 */
+  .grid .pr{
+    background-color:#e8c356 !important;
+    background-image:linear-gradient(180deg,#f5d878,#dcae35) !important;
+    background-size:100% 100% !important;
+    background-repeat:no-repeat !important;
+    background-position:0 0 !important;
+    background-clip:border-box !important;
+    -webkit-background-clip:border-box !important;
+  }
+
   /* ==== スニダンPSA v3: 列を盤面いっぱいに広げ画像を大きく / はみ出し防止 ==== */
   /* 列は minmax(0,1fr) で盤面幅を超えない。imgbox はカード比率(5:7)で列幅いっぱい。 */
   .grid{ width:100% !important; max-width:100% !important; margin:0 !important; justify-content:stretch !important; }
@@ -479,6 +498,8 @@
     <aside id="editPanel">
       <div class="epHead">編集リスト <span id="epCount"></span></div>
       <button id="epRefresh" onclick="refreshPrices()">最安値を更新（スニダン）</button>
+      <button id="epComp" onclick="refreshComp()">競合買取を更新（シンソク/トレカバース）</button>
+      <label class="compToggle"><input type="checkbox" id="compAdjustChk" checked onchange="toggleCompAdjust(this)"> 競合に応じて自動調整（上げ+3% / 20%差で下げ=中間）</label>
       <button id="epCopy" onclick="copyForX()">Xポスト用にコピー</button>
       <div id="epList"></div>
       <div class="epHint">並べ替えはプレビュー上の⠿をドラッグ</div>
@@ -527,7 +548,68 @@
   }
 
   function roundBuy(n){ n=Math.floor(Number(n)||0); if(n<=0) return 0; if(n<10000) return Math.floor(n/100)*100; return Math.floor(n/1000)*1000; }
-  function recalc(it){ if(!it||it.manual) return; var mg=(it.margin!=null?it.margin:0.94); it.buy=(it.min>0)? roundBuy(it.min*mg) : 0; }
+
+  /* ===== 競合買取（シンソク/トレカバース）: 取得・型番マッチ・自動調整 ===== */
+  var compS={}, compT={};        // 型番トークン -> {price,name}
+  var compLoaded=false;
+  var COMP_ADJUST=true;          // 競合に応じて自動調整するか（上げ・下げ共通のマスター）
+  var COMP_UP=1.03;              // 上げ: 競合買取 × この倍率（+3%）
+  var COMP_DOWN=true;            // 下げ調整を行うか
+  var COMP_DOWN_GAP=0.20;        // 下げ発動: 競合が自店より これ以上安い（20%以上乖離）時
+  // 下げ先は「自店base と 競合(高い方) の中間」のきれいな金額
+  // 型番トークン正規化（SNKRDUNK「SM-P 397」も競合「397/SM-P」も同じキーに）
+  function normTok(s){
+    if(!s) return '';
+    var t=String(s).toUpperCase().replace(/[！-～]/g,function(ch){return String.fromCharCode(ch.charCodeAt(0)-0xFEE0);}).replace(/　/g,' ');
+    var exp=t.match(/([A-Z]{1,3})-?P\b/), num=t.match(/\d{1,4}/);
+    if(exp&&num) return num[0]+'/'+exp[1]+'-P';
+    var m=t.match(/\d{1,4}\/\d{1,4}[A-Z]*/); if(m) return m[0].replace(/\s+/g,'');
+    m=t.match(/NO\.?\s*(\d+)/); if(m) return 'NO'+m[1];
+    m=t.match(/\d{1,4}\/[0-9A-Z\-]+/); if(m) return m[0].replace(/\s+/g,'');
+    return '';
+  }
+  function itemTok(it){ return normTok(it.code) || normTok(it.name); }
+  // カードに競合買取を紐付け
+  function matchComp(it){
+    if(!it || it.custom){ if(it){ it.compS=null; it.compT=null; } return; }
+    var tk=itemTok(it); it.tok=tk;
+    it.compS=(tk && compS[tk])? compS[tk].price : null;
+    it.compT=(tk && compT[tk])? compT[tk].price : null;
+  }
+  // 基準にする競合買取（シンソク/トレカバースの高い方）
+  function compBest(it){ var a=Number(it.compS)||0, b=Number(it.compT)||0; var m=Math.max(a,b); return m>0?m:0; }
+
+  function recalc(it){
+    if(!it||it.manual) return;
+    if(!(it.min>0)){ it.buy=0; it.base=0; it.adjusted=false; it.adjDir=''; it.effMargin=null; return; }  // スニダン価格なし=要確認
+    var mg=(it.margin!=null?it.margin:0.94);
+    var base=roundBuy(it.min*mg); it.base=base;
+    var comp=COMP_ADJUST? compBest(it) : 0;
+    if(comp>0 && comp>base){
+      // 上げ: 競合より高く（+3%）
+      it.buy=roundBuy(comp*COMP_UP); it.adjusted=true; it.adjDir='up'; it.effMargin=it.buy/it.min;
+    } else if(COMP_DOWN && comp>0 && comp <= base*(1-COMP_DOWN_GAP)){
+      // 下げ: 競合が自店より20%以上安い → 自店と競合の中間のきれいな金額へ
+      it.buy=roundBuy((base+comp)/2); it.adjusted=true; it.adjDir='down'; it.effMargin=it.buy/it.min;
+    } else {
+      it.buy=base; it.adjusted=false; it.adjDir=''; it.effMargin=null;
+    }
+  }
+  function applyCompAll(){ items.forEach(function(it){ matchComp(it); recalc(it); }); }
+  function loadComp(silent){
+    return jsonp(apiUrl(), {action:'comp'}, 120000).then(function(d){
+      compS={}; compT={};
+      (d.shinsoku||[]).forEach(function(x){ if(x && x.tok && !compS[x.tok]) compS[x.tok]={price:x.price,name:x.name}; });
+      (d.tore||[]).forEach(function(x){ if(x && x.tok && !compT[x.tok]) compT[x.tok]={price:x.price,name:x.name}; });
+      compLoaded=true; applyCompAll(); render();
+      if(!silent) setStatus('競合買取を取得（シンソク'+Object.keys(compS).length+'件 / トレカバース'+Object.keys(compT).length+'件）。');
+    }).catch(function(e){ if(!silent) setStatus('競合取得失敗: '+e.message,true); });
+  }
+  function refreshComp(){
+    var b=document.getElementById('epComp'); if(b){ b.disabled=true; b.textContent='競合更新中…'; }
+    loadComp(false).then(function(){ if(b){ b.disabled=false; b.textContent='競合買取を更新（シンソク/トレカバース）'; } });
+  }
+  function toggleCompAdjust(el){ COMP_ADJUST=!!(el&&el.checked); applyCompAll(); render(); setStatus(COMP_ADJUST?'競合調整ON（上げ:競合×1.03 / 下げ:20%差で中間）':'競合調整OFF（スニダン×掛け率のみ）'); }
   function doSearch(){
     var q=document.getElementById('q').value.trim();
     if(!q){ setStatus('検索キーワードを入力してください。',true); return; }
@@ -635,7 +717,8 @@
       if(r.error || !r.item){ setStatus('取得失敗: '+((r&&r.error)||'不明'),true); return; }
       var c=r.item;
       var card={id:c.id, name:(c.name||it.name), code:(c.code||it.code||''), img:(c.img||it.img||''), imgAlt:'', min:c.min, margin:0.94, manual:false, buy:0, psa:true};
-      recalc(card); items.push(card); render();
+      matchComp(card); recalc(card); items.push(card); render();
+      if(!compLoaded) loadComp(true);
       if(card.min==null) setStatus(card.name+' を追加（PSA10出品なし→要確認。手動で価格入力）。',true);
       else setStatus(card.name+' 追加（最安¥'+yen(card.min)+' ×'+card.margin+'→¥'+yen(card.buy)+'）。画像変換中…');
       convertImg(card).then(function(){ render(); });
@@ -696,7 +779,7 @@
     var btn=document.getElementById('epRefresh'); if(btn){ btn.disabled=true; btn.textContent='更新中…'; }
     jsonp(apiUrl(), {action:'cards', ids:JSON.stringify(ids)}, 120000).then(function(d){
       var map={}; (d.items||[]).forEach(function(c){ map[c.id]=c; });
-      var n=0; items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; recalc(it); n++; } });
+      var n=0; items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; matchComp(it); recalc(it); n++; } });
       render(); setStatus('最安値を更新しました（'+n+'件）。手動上書き分は維持。');
     }).catch(function(e){ setStatus('更新失敗: '+e.message,true); })
     .then(function(){ if(btn){ btn.disabled=false; btn.textContent='最安値を更新（スニダン）'; } });
@@ -728,6 +811,21 @@
     document.getElementById('epCount').textContent='('+list.length+'枚)';
     el.innerHTML = list.map(function(it,i){
       var ref = (it.min!=null)? ('最安¥'+yen(it.min)) : (it.custom?'自作':'要確認');
+      // 競合買取の表示（シンソク / トレカバース）と調整マーク
+      var compStr='';
+      if(!it.custom){
+        var ps = it.compS? ('シ¥'+yen(it.compS)) : '';
+        var pt = it.compT? ('ト¥'+yen(it.compT)) : '';
+        var cc = [ps,pt].filter(Boolean).join('　');
+        if(cc){
+          var mark = it.adjusted ? ('　'+(it.adjDir==='down'?'↓調整':'↑調整')+' 実質'+Math.round((it.effMargin||0)*100)+'%') : '';
+          var cls = it.adjusted ? (it.adjDir==='down'?' adj down':' adj') : '';
+          compStr = '<span class="epcomp'+cls+'">'+cc+mark+'</span>';
+        } else {
+          compStr = '<span class="epcomp none">競合データなし</span>';
+        }
+      }
+      var priceColor = it.manual ? 'color:#ffd27a' : (it.adjDir==='down' ? 'color:#ff9a6a' : (it.adjusted ? 'color:#7ec8ff' : ''));
       return '<div class="epRow" draggable="true" data-i="'+i+'">'+
         '<span class="epdrag" title="ドラッグで移動">⠿</span>'+
         (it.img?'<img class="epimg" src="'+esc(it.img)+'" alt="" onerror="this.style.visibility=\'hidden\'">':'<span class="epimg"></span>')+
@@ -736,8 +834,9 @@
           '<div class="epsub">'+
             '<span class="epref">'+ref+'</span>'+
             '<span class="epx2">率</span><select class="epmargin" title="掛け率" data-i="'+i+'" onchange="epMargin('+i+',this)"'+(it.custom?' disabled':'')+'>'+marginOpts(it.margin)+'</select>'+
-            '<span class="epy">¥</span><input class="epprice" type="text" inputmode="numeric" value="'+(isNum(it.buy)?yen(it.buy):'')+'" data-i="'+i+'" oninput="epPrice('+i+',this)" onkeydown="epPriceKey(event,'+i+')"'+(it.manual?' style="color:#ffd27a"':'')+'>'+
+            '<span class="epy">¥</span><input class="epprice" type="text" inputmode="numeric" value="'+(isNum(it.buy)?yen(it.buy):'')+'" data-i="'+i+'" oninput="epPrice('+i+',this)" onkeydown="epPriceKey(event,'+i+')"'+(priceColor?(' style="'+priceColor+'"'):'')+'>'+
           '</div>'+
+          (compStr?('<div class="epsub2">'+compStr+'</div>'):'')+
         '</div>'+
         '<button class="epbtn ep-im" onclick="changeImg('+i+')">画像</button>'+
         '<button class="epbtn ep-x" onclick="removeRow('+i+')">×</button>'+
@@ -754,7 +853,7 @@
     return o;
   }
   function epPrice(i,el){ if(items[i]){ items[i].buy=Number(String(el.value).replace(/[^\d]/g,''))||0; items[i].manual=true; renderPreviewOnly(); } }
-  function epMargin(i,el){ if(items[i]){ if(items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=''; } renderPreviewOnly(); } } }
+  function epMargin(i,el){ if(items[i]){ if(items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=(items[i].adjDir==='down'?'#ff9a6a':(items[i].adjusted?'#7ec8ff':'')); } var c2=row&&row.querySelector('.epsub2 .epcomp'); if(c2){ c2.className='epcomp'+(items[i].adjusted?(items[i].adjDir==='down'?' adj down':' adj'):''); } renderPreviewOnly(); } } }
   function epPriceKey(ev,i){
     if(ev.key==='Enter'){ ev.preventDefault();
       var inputs=document.querySelectorAll('#epList .epprice');
@@ -835,8 +934,8 @@
       setStatus('最新最安値を取得中…（'+ids.length+'件）');
       jsonp(apiUrl(), {action:'cards', ids:JSON.stringify(ids)}, 120000).then(function(d2){
         var map={}; (d2.items||[]).forEach(function(c){ map[c.id]=c; });
-        items.forEach(function(it){ var c=map[it.id]; if(c && c.min!=null) it.min=c.min; recalc(it); });
-        render(); setStatus('画像変換中…');
+        items.forEach(function(it){ var c=map[it.id]; if(c && c.min!=null) it.min=c.min; matchComp(it); recalc(it); });
+        render(); setStatus('画像変換中…'); if(!compLoaded) loadComp(true);
         convertAll(items, function(done,total){ setStatus('画像変換中…（'+done+'/'+total+'）'); }).then(function(){ render(); setStatus('テンプレート「'+name+'」を読み込みました（'+items.length+'件）。'); });
       }).catch(function(){ convertAll(items).then(function(){ render(); setStatus('読込完了（最安値更新は失敗、保存値を使用）。',true); }); });
     }).catch(function(e){ setStatus('読込失敗: '+e.message,true); });
@@ -938,6 +1037,7 @@
 
   fitBoard();
   tplRefresh();
+  loadComp(true);
   (function(){ var b=document.getElementById('editToggle'); if(b) b.textContent='▶ 閉じる'; })();
   renderEdit();
 </script>
