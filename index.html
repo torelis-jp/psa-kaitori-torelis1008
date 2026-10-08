@@ -270,6 +270,8 @@
   .epsub2{ display:flex; align-items:center; gap:8px; margin-top:2px; font-size:11px; }
   .epcomp{ color:#8fd0ff; } .epcomp.none{ color:#777; } .epcomp.adj{ color:#ffd27a; font-weight:700; } .epcomp.adj.down{ color:#ff9a6a; }
   select.epmargin.adjup{ border-color:#7ec8ff; color:#7ec8ff; } select.epmargin.adjdown{ border-color:#ff9a6a; color:#ff9a6a; }
+  .epref{ font-size:10px; line-height:1.3; }
+  .refbase{ color:#9ad29a; margin-left:4px; }
   .epprice{ width:78px !important; }
 
   /* === UI refresh: layout and controls only; application logic remains unchanged === */
@@ -580,24 +582,27 @@
 
   function snapUp(r){ return Math.ceil(r*100)/100; }      // 1%刻み(切り上げ=目標以上を保証)
   function snapNear(r){ return Math.round(r*100)/100; }   // 1%刻み(四捨五入)
+  // 基準価格 = スニダン最安値 と 直近3件実売平均 の「安い方」(両方あれば小さい方、片方のみならそれ)
+  function cardRef(it){ var a=Number(it.min)||0, b=Number(it.sold3)||0; if(a>0&&b>0) return Math.min(a,b); return a>0?a:(b>0?b:0); }
   function recalc(it){
     if(!it||it.manual) return;
-    if(!(it.min>0)){ it.buy=0; it.base=0; it.adjusted=false; it.adjDir=''; it.effMargin=null; return; }  // スニダン価格なし=要確認
+    var ref=cardRef(it);
+    if(!(ref>0)){ it.buy=0; it.base=0; it.adjusted=false; it.adjDir=''; it.effMargin=null; return; }  // 基準価格なし=要確認
     var mg=(it.margin!=null?it.margin:0.94);
-    var base=roundBuy(it.min*mg); it.base=base;
+    var base=roundBuy(ref*mg); it.base=base;
     var comp=COMP_ADJUST? compBest(it) : 0;
-    if(comp>0 && it.min>=COMP_HI){
-      // 100万円以上(スニダン最安値基準)のカード: 上げ下げに関わらず 競合×1.03 に統一
-      var rh=snapUp(comp*COMP_UP/it.min);
-      it.buy=roundBuy(it.min*rh); it.adjusted=true; it.adjDir=(it.buy<base?'down':'up'); it.effMargin=rh;
+    if(comp>0 && ref>=COMP_HI){
+      // 100万円以上(基準価格)のカード: 上げ下げに関わらず 競合×1.03 に統一
+      var rh=snapUp(comp*COMP_UP/ref);
+      it.buy=roundBuy(ref*rh); it.adjusted=true; it.adjDir=(it.buy<base?'down':'up'); it.effMargin=rh;
     } else if(comp>0 && comp>base){
       // 上げ: 競合より高く（+3%）→ 対応する掛け率を自動選択
-      var ru=snapUp(comp*COMP_UP/it.min);
-      it.buy=roundBuy(it.min*ru); it.adjusted=true; it.adjDir='up'; it.effMargin=ru;
-    } else if(COMP_DOWN && comp>0 && comp <= it.min*(1-COMP_DOWN_GAP)){
-      // 下げ: 競合がスニダン最安値より10%以上安い → 自店と競合の中間の金額に対応する掛け率を自動選択
-      var rd=snapNear(((base+comp)/2)/it.min);
-      it.buy=roundBuy(it.min*rd); it.adjusted=true; it.adjDir='down'; it.effMargin=rd;
+      var ru=snapUp(comp*COMP_UP/ref);
+      it.buy=roundBuy(ref*ru); it.adjusted=true; it.adjDir='up'; it.effMargin=ru;
+    } else if(COMP_DOWN && comp>0 && comp <= ref*(1-COMP_DOWN_GAP)){
+      // 下げ: 競合が基準価格より10%以上安い → 自店と競合の中間の金額に対応する掛け率を自動選択
+      var rd=snapNear(((base+comp)/2)/ref);
+      it.buy=roundBuy(ref*rd); it.adjusted=true; it.adjDir='down'; it.effMargin=rd;
     } else {
       it.buy=base; it.adjusted=false; it.adjDir=''; it.effMargin=null;
     }
@@ -723,11 +728,11 @@
     jsonp(apiUrl(), {action:'card', id:it.id}).then(function(r){
       if(r.error || !r.item){ setStatus('取得失敗: '+((r&&r.error)||'不明'),true); return; }
       var c=r.item;
-      var card={id:c.id, name:(c.name||it.name), code:(c.code||it.code||''), img:(c.img||it.img||''), imgAlt:'', min:c.min, margin:0.94, manual:false, buy:0, psa:true};
+      var card={id:c.id, name:(c.name||it.name), code:(c.code||it.code||''), img:(c.img||it.img||''), imgAlt:'', min:c.min, sold3:c.sold3, margin:0.94, manual:false, buy:0, psa:true};
       matchComp(card); recalc(card); items.push(card); render();
       if(!compLoaded) loadComp(true);
-      if(card.min==null) setStatus(card.name+' を追加（PSA10出品なし→要確認。手動で価格入力）。',true);
-      else setStatus(card.name+' 追加（最安¥'+yen(card.min)+' ×'+card.margin+'→¥'+yen(card.buy)+'）。画像変換中…');
+      if(cardRef(card)<=0) setStatus(card.name+' を追加（PSA10価格なし→要確認。手動で価格入力）。',true);
+      else setStatus(card.name+' 追加（基準¥'+yen(cardRef(card))+'→買取¥'+yen(card.buy)+'）。画像変換中…');
       convertImg(card).then(function(){ render(); });
     }).catch(function(e){ setStatus('取得失敗: '+e.message,true); });
   }
@@ -754,9 +759,26 @@
       wrap.appendChild(cell);
     });
     renderEdit();
+    fitGrid();
     fitPrices();
   }
   function removeRow(i){ items.splice(i,1); render(); }
+  // カード枚数が多く縦にはみ出す時、画像の高さを縮めて全カードを盤面内に収める
+  function fitGrid(){
+    var gw=document.querySelector('.gridwrap'); var grid=document.getElementById('rows');
+    if(!gw||!grid) return;
+    var boxes=grid.querySelectorAll('.imgbox');
+    Array.prototype.forEach.call(boxes,function(b){ b.style.removeProperty('max-height'); });  // 一旦リセット
+    if(!boxes.length) return;
+    var wh=gw.clientHeight; if(!(wh>0)) return;
+    var guard=0;
+    while(grid.scrollHeight > wh && guard < 80){
+      Array.prototype.forEach.call(boxes,function(b){
+        var h=b.offsetHeight; if(h>20) b.style.setProperty('max-height', Math.floor(h*0.93)+'px', 'important');  // !important指定に勝つ
+      });
+      guard++;
+    }
+  }
   // 金額が帯からはみ出す場合、フォントを縮めて枠内に収める
   function fitPrices(){
     var prs=document.querySelectorAll('#rows .pr');
@@ -772,7 +794,7 @@
       }
     });
   }
-  window.addEventListener('resize', function(){ try{ fitPrices(); }catch(e){} });
+  window.addEventListener('resize', function(){ try{ fitGrid(); fitPrices(); }catch(e){} });
   function toggleEdit(){
     document.body.classList.toggle('edit-closed');
     document.getElementById('editToggle').textContent = document.body.classList.contains('edit-closed') ? '◀ 編集' : '▶ 閉じる';
@@ -786,7 +808,7 @@
     var btn=document.getElementById('epRefresh'); if(btn){ btn.disabled=true; btn.textContent='更新中…'; }
     jsonp(apiUrl(), {action:'cards', ids:JSON.stringify(ids)}, 120000).then(function(d){
       var map={}; (d.items||[]).forEach(function(c){ map[c.id]=c; });
-      var n=0; items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; matchComp(it); recalc(it); n++; } });
+      var n=0; items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; if(c.sold3!=null) it.sold3=c.sold3; matchComp(it); recalc(it); n++; } });
       render(); setStatus('最安値を更新しました（'+n+'件）。手動上書き分は維持。');
     }).catch(function(e){ setStatus('更新失敗: '+e.message,true); })
     .then(function(){ if(btn){ btn.disabled=false; btn.textContent='最安値を更新（スニダン）'; } });
@@ -817,7 +839,20 @@
     var list=items.slice(0,MAX);
     document.getElementById('epCount').textContent='('+list.length+'枚)';
     el.innerHTML = list.map(function(it,i){
-      var ref = (it.min!=null)? ('最安¥'+yen(it.min)) : (it.custom?'自作':'要確認');
+      var ref;
+      if(it.custom){ ref='自作'; }
+      else{
+        var rr=cardRef(it);
+        if(rr<=0){ ref='要確認'; }
+        else{
+          var mn=(it.min>0)?('最安¥'+yen(it.min)):'';
+          var sd=(it.sold3>0)?('実売¥'+yen(it.sold3)):'';
+          var both=[mn,sd].filter(Boolean).join(' / ');
+          // 基準(安い方)を明示
+          var fromLbl=(it.sold3>0 && rr===Number(it.sold3) && (!(it.min>0)||it.sold3<=it.min))?'実売':'最安';
+          ref=both+'<span class="refbase">→基準¥'+yen(rr)+'('+fromLbl+')</span>';
+        }
+      }
       // 競合買取の表示（シンソク / トレカバース）と調整マーク
       var compStr='';
       if(!it.custom){
@@ -941,13 +976,13 @@
       setStatus('最新最安値を取得中…（'+ids.length+'件）');
       jsonp(apiUrl(), {action:'cards', ids:JSON.stringify(ids)}, 120000).then(function(d2){
         var map={}; (d2.items||[]).forEach(function(c){ map[c.id]=c; });
-        items.forEach(function(it){ var c=map[it.id]; if(c && c.min!=null) it.min=c.min; matchComp(it); recalc(it); });
+        items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; if(c.sold3!=null) it.sold3=c.sold3; } matchComp(it); recalc(it); });
         render(); setStatus('画像変換中…'); if(!compLoaded) loadComp(true);
         convertAll(items, function(done,total){ setStatus('画像変換中…（'+done+'/'+total+'）'); }).then(function(){ render(); setStatus('テンプレート「'+name+'」を読み込みました（'+items.length+'件）。'); });
       }).catch(function(){ convertAll(items).then(function(){ render(); setStatus('読込完了（最安値更新は失敗、保存値を使用）。',true); }); });
     }).catch(function(e){ setStatus('読込失敗: '+e.message,true); });
   }
-  function tplPayload(){ return JSON.stringify(items.slice(0,MAX).map(function(x){ return {id:x.id||'', name:x.name||'', code:x.code||'', img:x.img||'', min:(x.min==null?null:x.min), margin:(x.margin==null?null:x.margin), buy:x.buy, manual:!!x.manual, custom:!!x.custom, psa:true}; })); }
+  function tplPayload(){ return JSON.stringify(items.slice(0,MAX).map(function(x){ return {id:x.id||'', name:x.name||'', code:x.code||'', img:x.img||'', min:(x.min==null?null:x.min), sold3:(x.sold3==null?null:x.sold3), margin:(x.margin==null?null:x.margin), buy:x.buy, manual:!!x.manual, custom:!!x.custom, psa:true}; })); }
   function tplSave(){
     if(!items.length){ setStatus('保存する内容がありません。',true); return; }
     var name=prompt('新しいテンプレート名を入力');
@@ -1030,6 +1065,7 @@
         }
       }
       await fontsReady();
+      fitGrid();
       fitPrices();
       var board=document.getElementById('board');
       var canvas=await html2canvas(board,{ scale:1, width:1240, height:1754, useCORS:true, backgroundColor:'#0b0b0b', logging:false,
