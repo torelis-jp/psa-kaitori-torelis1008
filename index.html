@@ -586,12 +586,39 @@
     return '';
   }
   function itemTok(it){ return normTok(it.code) || normTok(it.name); }
-  // カードに競合買取を紐付け
+  // カード名の正規化(括弧・型番・記号・空白を除去)
+  function normName(s){
+    s=String(s||'');
+    s=s.replace(/[\[\(（【][^\]\)）】]*[\]\)）】]/g,'');   // 括弧内を除去
+    s=s.replace(/\d{1,4}\/[0-9A-Za-z\-]+/g,'');           // 型番(NNN/XXX)を除去
+    s=s.replace(/[\s　・,，、。\.\-:：]/g,'');              // 記号/空白を除去
+    return s.toUpperCase();
+  }
+  // 最長共通部分文字列の長さ
+  function lcsLen(a,b){
+    if(!a||!b) return 0;
+    var m=a.length,n=b.length,prev=new Array(n+1).fill(0),best=0;
+    for(var i=1;i<=m;i++){ var cur=new Array(n+1).fill(0);
+      for(var j=1;j<=n;j++){ if(a.charCodeAt(i-1)===b.charCodeAt(j-1)){ cur[j]=prev[j-1]+1; if(cur[j]>best) best=cur[j]; } }
+      prev=cur;
+    }
+    return best;
+  }
+  // 同じ型番の候補から、カード名に最も近いものの価格を返す(名前が合わなければnull=誤マッチ防止)
+  function pickComp(arr, cardNorm){
+    if(!arr||!arr.length) return null;
+    var best=null, bestScore=-1;
+    for(var i=0;i<arr.length;i++){ var n=normName(arr[i].name); var sc=lcsLen(n, cardNorm);
+      if(sc>bestScore){ bestScore=sc; best=arr[i]; } }
+    return (best && bestScore>=3)? best.price : null;   // 3文字以上一致で採用
+  }
+  // カードに競合買取を紐付け(型番+カード名で正しい1枚を選ぶ)
   function matchComp(it){
     if(!it || it.custom){ if(it){ it.compS=null; it.compT=null; } return; }
     var tk=itemTok(it); it.tok=tk;
-    it.compS=(tk && compS[tk])? compS[tk].price : null;
-    it.compT=(tk && compT[tk])? compT[tk].price : null;
+    var cn=normName(it.name);
+    it.compS = tk? pickComp(compS[tk], cn) : null;
+    it.compT = tk? pickComp(compT[tk], cn) : null;
   }
   // 基準にする競合買取（シンソク/トレカバースの高い方）
   function compBest(it){ var a=Number(it.compS)||0, b=Number(it.compT)||0; var m=Math.max(a,b); return m>0?m:0; }
@@ -627,8 +654,9 @@
   function loadComp(silent){
     return jsonp(apiUrl(), {action:'comp'}, 120000).then(function(d){
       compS={}; compT={};
-      (d.shinsoku||[]).forEach(function(x){ if(x && x.tok && !compS[x.tok]) compS[x.tok]={price:x.price,name:x.name}; });
-      (d.tore||[]).forEach(function(x){ if(x && x.tok && !compT[x.tok]) compT[x.tok]={price:x.price,name:x.name}; });
+      // 型番トークン→候補配列(同じ型番が複数あっても全部保持し、マッチ時に名前で選ぶ)
+      (d.shinsoku||[]).forEach(function(x){ if(x && x.tok){ (compS[x.tok]=compS[x.tok]||[]).push({price:x.price,name:x.name||''}); } });
+      (d.tore||[]).forEach(function(x){ if(x && x.tok){ (compT[x.tok]=compT[x.tok]||[]).push({price:x.price,name:x.name||''}); } });
       compLoaded=true; applyCompAll(); render();
       if(!silent) setStatus('競合買取を取得（シンソク'+Object.keys(compS).length+'件 / トレカバース'+Object.keys(compT).length+'件）。');
     }).catch(function(e){ if(!silent) setStatus('競合取得失敗: '+e.message,true); });
