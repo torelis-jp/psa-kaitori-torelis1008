@@ -497,7 +497,7 @@
       <div class="epHead">編集リスト <span id="epCount"></span></div>
       <button id="epRefresh" onclick="refreshPrices()">最安値を更新（スニダン）</button>
       <button id="epComp" onclick="refreshComp()">競合買取を更新（シンソク/トレカバース）</button>
-      <label class="compToggle"><input type="checkbox" id="compAdjustChk" checked onchange="toggleCompAdjust(this)"> 競合に応じて掛け率を自動調整（上げ+3% / 10%差で下げ=中間）</label>
+      <label class="compToggle"><input type="checkbox" id="compAdjustChk" checked onchange="toggleCompAdjust(this)"> 競合に応じて掛け率を自動調整（上げ+3% / 競合がスニダン最安比10%以上安いと下げ=中間）</label>
       <button id="epCopy" onclick="copyForX()">Xポスト用にコピー</button>
       <div id="epList"></div>
       <div class="epHint">並べ替えはプレビュー上の⠿をドラッグ</div>
@@ -553,7 +553,7 @@
   var COMP_ADJUST=true;          // 競合に応じて自動調整するか（上げ・下げ共通のマスター）
   var COMP_UP=1.03;              // 上げ: 競合買取 × この倍率（+3%）
   var COMP_DOWN=true;            // 下げ調整を行うか
-  var COMP_DOWN_GAP=0.10;        // 下げ発動: 競合が自店より これ以上安い（10%以上乖離）時
+  var COMP_DOWN_GAP=0.10;        // 下げ発動: 競合が「スニダン最安値」より これ以上安い（10%以上乖離）時
   // 下げ先は「自店base と 競合(高い方) の中間」→ その金額に対応する掛け率(1%刻み)を自動選択
   // 型番トークン正規化（SNKRDUNK「SM-P 397」も競合「397/SM-P」も同じキーに）
   function normTok(s){
@@ -589,8 +589,8 @@
       // 上げ: 競合より高く（+3%）→ 対応する掛け率を自動選択
       var ru=snapUp(comp*COMP_UP/it.min);
       it.buy=roundBuy(it.min*ru); it.adjusted=true; it.adjDir='up'; it.effMargin=ru;
-    } else if(COMP_DOWN && comp>0 && comp <= base*(1-COMP_DOWN_GAP)){
-      // 下げ: 競合が自店より10%以上安い → 自店と競合の中間の金額に対応する掛け率を自動選択
+    } else if(COMP_DOWN && comp>0 && comp <= it.min*(1-COMP_DOWN_GAP)){
+      // 下げ: 競合がスニダン最安値より10%以上安い → 自店と競合の中間の金額に対応する掛け率を自動選択
       var rd=snapNear(((base+comp)/2)/it.min);
       it.buy=roundBuy(it.min*rd); it.adjusted=true; it.adjDir='down'; it.effMargin=rd;
     } else {
@@ -611,7 +611,7 @@
     var b=document.getElementById('epComp'); if(b){ b.disabled=true; b.textContent='競合更新中…'; }
     loadComp(false).then(function(){ if(b){ b.disabled=false; b.textContent='競合買取を更新（シンソク/トレカバース）'; } });
   }
-  function toggleCompAdjust(el){ COMP_ADJUST=!!(el&&el.checked); applyCompAll(); render(); setStatus(COMP_ADJUST?'競合調整ON（上げ:競合×1.03 / 下げ:10%差で中間・掛け率自動選択）':'競合調整OFF（スニダン×掛け率のみ）'); }
+  function toggleCompAdjust(el){ COMP_ADJUST=!!(el&&el.checked); applyCompAll(); render(); setStatus(COMP_ADJUST?'競合調整ON（上げ:競合×1.03 / 下げ:競合がスニダン最安比10%以上安い時に中間・掛け率自動選択）':'競合調整OFF（スニダン×掛け率のみ）'); }
   function doSearch(){
     var q=document.getElementById('q').value.trim();
     if(!q){ setStatus('検索キーワードを入力してください。',true); return; }
