@@ -399,17 +399,14 @@
   .grid .pr{-webkit-text-stroke:3px #241707!important; text-shadow:0 2px 3px rgba(0,0,0,.95), 0 0 2px #241707!important;}
   .grid .pr .y{-webkit-text-stroke:2.2px #241707!important;}
 
-  /* ==== 金額バナー: 出力(html2canvas)でグラデが途中で切れる対策 ==== */
-  /* 金色の単色を下地に敷き、その上からグラデを全面(100% 100%)で重ねる。
-     万一グラデ描画が途中で止まっても下地の金色が出るので暗くならない。 */
-  .grid .pr{
-    background-color:#e8c356 !important;
-    background-image:linear-gradient(180deg,#f5d878,#dcae35) !important;
-    background-size:100% 100% !important;
-    background-repeat:no-repeat !important;
-    background-position:0 0 !important;
-    background-clip:border-box !important;
-    -webkit-background-clip:border-box !important;
+  /* ==== 金額バナー: 画面はグラデ、出力(html2canvas)は単色金で確実に塗る ==== */
+  /* html2canvas 1.4.1 はグラデ(特に background-size 指定時)を黒く描くことがあるため、
+     出力時だけ単色の金にする。単色は html2canvas が確実に塗れるのでバナーが崩れない。 */
+  .grid .pr{ background-color:#e9c35a !important; }  /* 画面でも下地に金（保険） */
+  body.exporting .grid .pr{
+    background:#e9c35a !important;
+    background-image:none !important;
+    background-color:#e9c35a !important;
   }
 
   /* ==== スニダンPSA v3: 列を盤面いっぱいに広げ画像を大きく / はみ出し防止 ==== */
