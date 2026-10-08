@@ -262,7 +262,7 @@
   .epsub{ display:flex; align-items:center; gap:4px; }
   .epref{ font-size:11px; color:#8fd0ff; min-width:70px; }
   .epx2{ color:#888; font-size:11px; }
-  .epmargin{ width:48px; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 5px; font-size:12px; text-align:center; font-family:inherit; }
+  .epmargin{ width:66px; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 5px; font-size:12px; text-align:center; font-family:inherit; }
   .epprice{ width:78px !important; }
 
   /* === UI refresh: layout and controls only; application logic remains unchanged === */
@@ -391,6 +391,36 @@
   /* 金額の数字と円記号の縁取りを太くする */
   .grid .pr{-webkit-text-stroke:3px #241707!important; text-shadow:0 2px 3px rgba(0,0,0,.95), 0 0 2px #241707!important;}
   .grid .pr .y{-webkit-text-stroke:2.2px #241707!important;}
+
+  /* ==== スニダンPSA v3: 列を盤面いっぱいに広げ画像を大きく / はみ出し防止 ==== */
+  /* 列は minmax(0,1fr) で盤面幅を超えない。imgbox はカード比率(5:7)で列幅いっぱい。 */
+  .grid{ width:100% !important; max-width:100% !important; margin:0 !important; justify-content:stretch !important; }
+  .grid.g1{grid-template-columns:minmax(0,1fr) !important}
+  .grid.g2{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .grid.g3{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+  .grid.g4{grid-template-columns:repeat(4,minmax(0,1fr)) !important}
+  .grid.g5{grid-template-columns:repeat(5,minmax(0,1fr)) !important}
+  .grid.g6{grid-template-columns:repeat(6,minmax(0,1fr)) !important}
+  .grid.g7{grid-template-columns:repeat(7,minmax(0,1fr)) !important}
+  .grid.g8{grid-template-columns:repeat(8,minmax(0,1fr)) !important}
+  .grid.g9{grid-template-columns:repeat(9,minmax(0,1fr)) !important}
+  .cell{ padding:8px 4px 16px !important; min-width:0 !important; overflow:visible !important; }
+  .nm,.pr{ max-width:100% !important; }
+  .imgbox{ margin-bottom:6px !important; width:100% !important; aspect-ratio:5/7 !important; height:auto !important; }
+  .imgbox img,.imgbox .noimg{ width:100% !important; height:100% !important; object-fit:contain !important; display:block; margin:0 auto; }
+  .g1 .imgbox{max-height:1150px !important}
+  .g2 .imgbox{max-height:600px !important}
+  .g3 .imgbox{max-height:470px !important}
+  .g4 .imgbox{max-height:352px !important}
+  .g5 .imgbox{max-height:290px !important}
+  .g6 .imgbox{max-height:240px !important}
+  .g7 .imgbox{max-height:200px !important}
+  .g8 .imgbox{max-height:178px !important}
+  .g9 .imgbox{max-height:160px !important}
+  /* PSA10バッジ: 右上端に少し被せる */
+  .grid .imgbox .psaBadge, .psaBadge{ top:-10px !important; right:-10px !important; left:auto !important; width:44% !important; max-width:120px !important; }
+  .g6 .psaBadge,.g7 .psaBadge,.g8 .psaBadge,.g9 .psaBadge{ width:54% !important; max-width:70px !important; }
+  body.exporting .psaBadge{ top:-10px !important; right:-10px !important; }
 </style>
 </head>
 <body>
@@ -705,7 +735,7 @@
           '<input class="epname" value="'+esc(it.name||'')+'" oninput="epName('+i+',this)">'+
           '<div class="epsub">'+
             '<span class="epref">'+ref+'</span>'+
-            '<span class="epx2">率</span><input class="epmargin" type="text" inputmode="decimal" value="'+(it.margin!=null?it.margin:'')+'" title="掛け率" data-i="'+i+'" oninput="epMargin('+i+',this)">'+
+            '<span class="epx2">率</span><select class="epmargin" title="掛け率" data-i="'+i+'" onchange="epMargin('+i+',this)"'+(it.custom?' disabled':'')+'>'+marginOpts(it.margin)+'</select>'+
             '<span class="epy">¥</span><input class="epprice" type="text" inputmode="numeric" value="'+(isNum(it.buy)?yen(it.buy):'')+'" data-i="'+i+'" oninput="epPrice('+i+',this)" onkeydown="epPriceKey(event,'+i+')"'+(it.manual?' style="color:#ffd27a"':'')+'>'+
           '</div>'+
         '</div>'+
@@ -714,8 +744,17 @@
       '</div>';
     }).join('') || '<div class="epHint">検索してカードを追加すると一覧に出ます。</div>';
   }
+  function marginOpts(v){
+    var cur=(v!=null)? Number(v).toFixed(2) : '0.94';
+    var o='';
+    for(var p=100;p>=80;p--){ var val=(p/100).toFixed(2); o+='<option value="'+val+'"'+(val===cur?' selected':'')+'>'+p+'%</option>'; }
+    // 現在値が選択肢に無い端数の場合も表示できるよう先頭に追加
+    var has=false; for(var q=100;q>=80;q--){ if((q/100).toFixed(2)===cur){ has=true; break; } }
+    if(!has){ o='<option value="'+cur+'" selected>'+Math.round(Number(cur)*100)+'%</option>'+o; }
+    return o;
+  }
   function epPrice(i,el){ if(items[i]){ items[i].buy=Number(String(el.value).replace(/[^\d]/g,''))||0; items[i].manual=true; renderPreviewOnly(); } }
-  function epMargin(i,el){ if(items[i]){ var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=''; } renderPreviewOnly(); } } }
+  function epMargin(i,el){ if(items[i]){ if(items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=''; } renderPreviewOnly(); } } }
   function epPriceKey(ev,i){
     if(ev.key==='Enter'){ ev.preventDefault();
       var inputs=document.querySelectorAll('#epList .epprice');
