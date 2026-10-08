@@ -1,4 +1,4 @@
-]<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -992,13 +992,19 @@
       setStatus('最新最安値を取得中…（'+ids.length+'件）');
       jsonp(apiUrl(), {action:'cards', ids:JSON.stringify(ids)}, 120000).then(function(d2){
         var map={}; (d2.items||[]).forEach(function(c){ map[c.id]=c; });
-        items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.min!=null) it.min=c.min; if(c.sold3!=null) it.sold3=c.sold3; } matchComp(it); recalc(it); });
+        items.forEach(function(it){ var c=map[it.id]; if(c){ if(c.name) it.name=c.name; if(c.code) it.code=c.code; if(c.img) it.img=c.img; if(c.min!=null) it.min=c.min; if(c.sold3!=null) it.sold3=c.sold3; } matchComp(it); recalc(it); });
         render(); setStatus('画像変換中…'); if(!compLoaded) loadComp(true);
         convertAll(items, function(done,total){ setStatus('画像変換中…（'+done+'/'+total+'）'); }).then(function(){ render(); setStatus('テンプレート「'+name+'」を読み込みました（'+items.length+'件）。'); });
       }).catch(function(){ convertAll(items).then(function(){ render(); setStatus('読込完了（最安値更新は失敗、保存値を使用）。',true); }); });
     }).catch(function(e){ setStatus('読込失敗: '+e.message,true); });
   }
-  function tplPayload(){ return JSON.stringify(items.slice(0,MAX).map(function(x){ return {id:x.id||'', name:x.name||'', code:x.code||'', img:x.img||'', min:(x.min==null?null:x.min), sold3:(x.sold3==null?null:x.sold3), margin:(x.margin==null?null:x.margin), buy:x.buy, manual:!!x.manual, custom:!!x.custom, psa:true}; })); }
+  // 保存は最小限に(URL長オーバー=通信エラー対策)。名前/型番/画像/最安/実売は読込時に再取得する。
+  function tplPayload(){ return JSON.stringify(items.slice(0,MAX).map(function(x){
+    var o={ id:x.id||'', margin:(x.margin==null?null:x.margin) };
+    if(x.manual){ o.manual=true; o.buy=x.buy; }           // 手動上書き分だけ金額を保存
+    if(x.custom){ o.custom=true; o.name=x.name||''; o.img=x.img||''; }  // 自作は再取得不可→名前/画像を保存
+    return o;
+  })); }
   function tplSave(){
     if(!items.length){ setStatus('保存する内容がありません。',true); return; }
     var name=prompt('新しいテンプレート名を入力');
