@@ -264,6 +264,18 @@
   .epx2{ color:#888; font-size:11px; }
   .epmargin{ width:48px; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 5px; font-size:12px; text-align:center; font-family:inherit; }
   .epprice{ width:78px !important; }
+
+  /* ==== スニダンPSA v2: 画像大 / PSAバッジ右上端 / 掛け率select ==== */
+  .cell{ overflow:visible !important; padding-top:6px !important; }
+  .g1 .imgbox{height:560px !important;max-height:560px !important} .g2 .imgbox{height:528px !important;max-height:528px !important} .g3 .imgbox{height:468px !important;max-height:468px !important}
+  .g4 .imgbox{height:372px !important;max-height:372px !important} .g5 .imgbox{height:288px !important;max-height:288px !important} .g6 .imgbox{height:226px !important;max-height:226px !important}
+  .g7 .imgbox{height:184px !important;max-height:184px !important} .g8 .imgbox{height:176px !important;max-height:176px !important} .g9 .imgbox{height:166px !important;max-height:166px !important}
+  .nm{ margin-top:3px; }
+  .psaBadge{ top:-10px !important; right:-10px !important; left:auto !important; width:44% !important; max-width:120px !important; }
+  .g6 .psaBadge,.g7 .psaBadge,.g8 .psaBadge,.g9 .psaBadge{ width:54% !important; max-width:70px !important; }
+  body.exporting .psaBadge{ top:-10px !important; right:-10px !important; }
+  select.epmargin{ width:66px !important; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 4px; font-size:12px; font-family:inherit; }
+  select.epmargin:disabled{ opacity:.5; }
 </style>
 </head>
 <body>
@@ -550,7 +562,7 @@
           '<input class="epname" value="'+esc(it.name||'')+'" oninput="epName('+i+',this)">'+
           '<div class="epsub">'+
             '<span class="epref">'+ref+'</span>'+
-            '<span class="epx2">率</span><input class="epmargin" type="text" inputmode="decimal" value="'+(it.margin!=null?it.margin:'')+'" title="掛け率" data-i="'+i+'" oninput="epMargin('+i+',this)">'+
+            '<span class="epx2">率</span><select class="epmargin" data-i="'+i+'" onchange="epMargin('+i+',this)"'+(it.custom?' disabled':'')+'>'+marginOpts(it.margin)+'</select>'+
             '<span class="epy">¥</span><input class="epprice" type="text" inputmode="numeric" value="'+(isNum(it.buy)?yen(it.buy):'')+'" data-i="'+i+'" oninput="epPrice('+i+',this)" onkeydown="epPriceKey(event,'+i+')"'+(it.manual?' style="color:#ffd27a"':'')+'>'+
           '</div>'+
         '</div>'+
@@ -560,7 +572,8 @@
     }).join('') || '<div class="epHint">検索してカードを追加すると一覧に出ます。</div>';
   }
   function epPrice(i,el){ if(items[i]){ items[i].buy=Number(String(el.value).replace(/[^\d]/g,''))||0; items[i].manual=true; renderPreviewOnly(); } }
-  function epMargin(i,el){ if(items[i]){ var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=''; } renderPreviewOnly(); } } }
+  function marginOpts(v){ var h='',cur=(v!=null?Number(v):0.94); for(var p=100;p>=80;p--){ var val=(p/100).toFixed(2); var sel=(Math.abs(cur-Number(val))<0.005)?' selected':''; h+='<option value="'+val+'"'+sel+'>'+p+'%</option>'; } return h; }
+  function epMargin(i,el){ if(!items[i]||items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); var row=el.closest('.epRow'); var pi=row&&row.querySelector('.epprice'); if(pi){ pi.value=yen(items[i].buy); pi.style.color=''; } renderPreviewOnly(); } }
   function epPriceKey(ev,i){
     if(ev.key==='Enter'){ ev.preventDefault();
       var inputs=document.querySelectorAll('#epList .epprice');
