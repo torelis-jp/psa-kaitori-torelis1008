@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+]<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -440,6 +440,22 @@
   .grid .imgbox .psaBadge, .psaBadge{ top:-10px !important; right:-10px !important; left:auto !important; width:44% !important; max-width:120px !important; }
   .g6 .psaBadge,.g7 .psaBadge,.g8 .psaBadge,.g9 .psaBadge{ width:54% !important; max-width:70px !important; }
   body.exporting .psaBadge{ top:-10px !important; right:-10px !important; }
+
+  /* ==== 金額: バナー(枠)なし・数字のみ。html2canvasのバナー描画崩れを根本回避 ==== */
+  .grid .pr, body.exporting .grid .pr{
+    background:none !important;
+    background-color:transparent !important;
+    background-image:none !important;
+    border:0 !important;
+    box-shadow:none !important;
+    border-radius:0 !important;
+    padding:2px 4px !important;
+    color:#ffd861 !important;                         /* 金色の数字 */
+    -webkit-text-stroke:3px #241707 !important;
+    paint-order:stroke fill;
+    text-shadow:0 2px 4px rgba(0,0,0,.95), 0 0 3px #000, 0 0 6px #000 !important;
+  }
+  .grid .pr .y{ color:#ffd861 !important; -webkit-text-stroke:2.4px #241707 !important; }
 </style>
 </head>
 <body>
