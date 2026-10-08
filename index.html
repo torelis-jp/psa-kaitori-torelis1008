@@ -274,6 +274,34 @@
   .psaBadge{ top:-10px !important; right:-10px !important; left:auto !important; width:44% !important; max-width:120px !important; }
   .g6 .psaBadge,.g7 .psaBadge,.g8 .psaBadge,.g9 .psaBadge{ width:54% !important; max-width:70px !important; }
   body.exporting .psaBadge{ top:-10px !important; right:-10px !important; }
+
+  /* ==== スニダンPSA v3: 列を盤面いっぱいに広げて画像を実際に大きくする ==== */
+  /* 原因=列幅が固定(例:g3=300px)で盤面(内側1024px)より狭く、画像が横幅で頭打ち。
+     列を1frにして横幅を最大化し、画像高さは自動で追従させて余白を無くす。 */
+  .grid.g1{grid-template-columns:1fr !important}
+  .grid.g2{grid-template-columns:repeat(2,1fr) !important}
+  .grid.g3{grid-template-columns:repeat(3,1fr) !important}
+  .grid.g4{grid-template-columns:repeat(4,1fr) !important}
+  .grid.g5{grid-template-columns:repeat(5,1fr) !important}
+  .grid.g6{grid-template-columns:repeat(6,1fr) !important}
+  .grid.g7{grid-template-columns:repeat(7,1fr) !important}
+  .grid.g8{grid-template-columns:repeat(8,1fr) !important}
+  .grid.g9{grid-template-columns:repeat(9,1fr) !important}
+  .cell{ padding:8px 4px 16px !important; }
+  /* imgbox をカードの縦横比(5:7)の箱にし、列幅いっぱいに広げる。
+     画像は箱いっぱい(contain)で、列が広いほど画像も大きくなる。
+     max-height は段数が多い時に盤面からはみ出さないための保険。 */
+  .imgbox{ margin-bottom:6px !important; width:100% !important; aspect-ratio:5/7 !important; height:auto !important; }
+  .imgbox img,.imgbox .noimg{ width:100% !important; height:100% !important; object-fit:contain !important; display:block; margin:0 auto; }
+  .g1 .imgbox{max-height:1150px !important}
+  .g2 .imgbox{max-height:600px !important}
+  .g3 .imgbox{max-height:470px !important}
+  .g4 .imgbox{max-height:352px !important}
+  .g5 .imgbox{max-height:290px !important}
+  .g6 .imgbox{max-height:240px !important}
+  .g7 .imgbox{max-height:200px !important}
+  .g8 .imgbox{max-height:178px !important}
+  .g9 .imgbox{max-height:160px !important}
   select.epmargin{ width:66px !important; background:#0b0b0b; color:#ffe08a; border:1px solid #333; border-radius:6px; padding:4px 4px; font-size:12px; font-family:inherit; }
   select.epmargin:disabled{ opacity:.5; }
 </style>
