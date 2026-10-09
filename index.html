@@ -573,7 +573,8 @@
   var COMP_DOWN=true;            // 下げ調整を行うか
   var COMP_DOWN_GAP=0.10;        // 下げ発動: 競合が「スニダン最安値」より これ以上安い（10%以上乖離）時
   // 下げ先は「自店base と 競合(高い方) の中間」→ その金額に対応する掛け率(1%刻み)を自動選択
-  var COMP_HI=1000000;           // スニダン最安値がこの額以上のカードは、常に競合×1.03に統一
+  var COMP_HI=1000000;           // 基準価格がこの額以上のカードは、常に競合×1.03に統一
+  var LOW_MARGIN_MAX=15000;      // 基準価格がこの額以下のカードは、掛け率の既定を0.88にする
   // 型番トークン正規化（SNKRDUNK「SM-P 397」も競合「397/SM-P」も同じキーに）
   function normTok(s){
     if(!s) return '';
@@ -631,6 +632,7 @@
     if(!it||it.manual) return;
     var ref=cardRef(it);
     if(!(ref>0)){ it.buy=0; it.base=0; it.adjusted=false; it.adjDir=''; it.effMargin=null; return; }  // 基準価格なし=要確認
+    if(!it.mUser){ it.margin = (ref<=LOW_MARGIN_MAX ? 0.88 : 0.94); }  // 階層デフォルト: 15,000円以下=0.88 / それ以外=0.94(手動選択時は尊重)
     var mg=(it.margin!=null?it.margin:0.94);
     var base=roundBuy(ref*mg); it.base=base;
     var comp=COMP_ADJUST? compBest(it) : 0;
@@ -939,7 +941,7 @@
     return o;
   }
   function epPrice(i,el){ if(items[i]){ items[i].buy=Number(String(el.value).replace(/[^\d]/g,''))||0; items[i].manual=true; renderPreviewOnly(); } }
-  function epMargin(i,el){ if(items[i]){ if(items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].manual=false; recalc(items[i]); render(); } } }
+  function epMargin(i,el){ if(items[i]){ if(items[i].custom) return; var m=parseFloat(el.value); if(!isNaN(m)){ items[i].margin=m; items[i].mUser=true; items[i].manual=false; recalc(items[i]); render(); } } }
   function epPriceKey(ev,i){
     if(ev.key==='Enter'){ ev.preventDefault();
       var inputs=document.querySelectorAll('#epList .epprice');
@@ -1029,6 +1031,7 @@
   // 保存は最小限に(URL長オーバー=通信エラー対策)。名前/型番/画像/最安/実売は読込時に再取得する。
   function tplPayload(){ return JSON.stringify(items.slice(0,MAX).map(function(x){
     var o={ id:x.id||'', margin:(x.margin==null?null:x.margin) };
+    if(x.mUser){ o.mUser=true; }                          // 手動で選んだ掛け率は保持(階層デフォルトで上書きしない)
     if(x.manual){ o.manual=true; o.buy=x.buy; }           // 手動上書き分だけ金額を保存
     if(x.custom){ o.custom=true; o.name=x.name||''; o.img=x.img||''; }  // 自作は再取得不可→名前/画像を保存
     return o;
