@@ -570,6 +570,7 @@
   var compLoaded=false;
   var COMP_ADJUST=true;          // 競合に応じて自動調整するか（上げ・下げ共通のマスター）
   var COMP_UP=1.03;              // 上げ: 競合買取 × この倍率（+3%）
+  var COMP_CAP=0.97;             // 掛け率の上限(スニダン基準の97%)。競合調整・100万統一・手動すべてにこの上限を適用
   var COMP_DOWN=true;            // 下げ調整を行うか
   var COMP_DOWN_GAP=0.10;        // 下げ発動: 競合が「スニダン最安値」より これ以上安い（10%以上乖離）時
   // 下げ先は「自店base と 競合(高い方) の中間」→ その金額に対応する掛け率(1%刻み)を自動選択
@@ -633,21 +634,21 @@
     var ref=cardRef(it);
     if(!(ref>0)){ it.buy=0; it.base=0; it.adjusted=false; it.adjDir=''; it.effMargin=null; return; }  // 基準価格なし=要確認
     if(!it.mUser){ it.margin = (ref<=LOW_MARGIN_MAX ? 0.88 : 0.94); }  // 階層デフォルト: 15,000円以下=0.88 / それ以外=0.94(手動選択時は尊重)
-    var mg=(it.margin!=null?it.margin:0.94);
+    if(it.mUser && it.margin>COMP_CAP) it.margin=COMP_CAP;             // 手動でも上限97%
+    var mg=Math.min((it.margin!=null?it.margin:0.94), COMP_CAP);      // 自店掛け率も97%上限
     var base=roundBuy(ref*mg); it.base=base;
     var comp=COMP_ADJUST? compBest(it) : 0;
+    var rate=null;
     if(comp>0 && ref>=COMP_HI){
-      // 100万円以上(基準価格)のカード: 上げ下げに関わらず 競合×1.03 に統一
-      var rh=snapUp(comp*COMP_UP/ref);
-      it.buy=roundBuy(ref*rh); it.adjusted=true; it.adjDir=(it.buy<base?'down':'up'); it.effMargin=rh;
+      rate=snapUp(comp*COMP_UP/ref);                 // 100万円以上: 競合×1.03に統一
     } else if(comp>0 && comp>base){
-      // 上げ: 競合より高く（+3%）→ 対応する掛け率を自動選択
-      var ru=snapUp(comp*COMP_UP/ref);
-      it.buy=roundBuy(ref*ru); it.adjusted=true; it.adjDir='up'; it.effMargin=ru;
+      rate=snapUp(comp*COMP_UP/ref);                 // 上げ: 競合より高く(+3%)
     } else if(COMP_DOWN && comp>0 && comp <= ref*(1-COMP_DOWN_GAP)){
-      // 下げ: 競合が基準価格より10%以上安い → 自店と競合の中間の金額に対応する掛け率を自動選択
-      var rd=snapNear(((base+comp)/2)/ref);
-      it.buy=roundBuy(ref*rd); it.adjusted=true; it.adjDir='down'; it.effMargin=rd;
+      rate=snapNear(((base+comp)/2)/ref);            // 下げ: 自店と競合の中間
+    }
+    if(rate!=null){
+      if(rate>COMP_CAP) rate=COMP_CAP;               // スニダン基準97%を超えない(=100%超えも当然なし)
+      it.buy=roundBuy(ref*rate); it.adjusted=true; it.adjDir=(it.buy<base?'down':'up'); it.effMargin=rate;
     } else {
       it.buy=base; it.adjusted=false; it.adjDir=''; it.effMargin=null;
     }
@@ -934,9 +935,9 @@
   function marginOpts(v){
     var cur=(v!=null)? Number(v).toFixed(2) : '0.94';
     var o='';
-    for(var p=100;p>=80;p--){ var val=(p/100).toFixed(2); o+='<option value="'+val+'"'+(val===cur?' selected':'')+'>'+p+'%</option>'; }
+    for(var p=97;p>=80;p--){ var val=(p/100).toFixed(2); o+='<option value="'+val+'"'+(val===cur?' selected':'')+'>'+p+'%</option>'; }
     // 現在値が選択肢に無い端数の場合も表示できるよう先頭に追加
-    var has=false; for(var q=100;q>=80;q--){ if((q/100).toFixed(2)===cur){ has=true; break; } }
+    var has=false; for(var q=97;q>=80;q--){ if((q/100).toFixed(2)===cur){ has=true; break; } }
     if(!has){ o='<option value="'+cur+'" selected>'+Math.round(Number(cur)*100)+'%</option>'+o; }
     return o;
   }
