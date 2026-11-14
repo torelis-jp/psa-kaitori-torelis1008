@@ -671,14 +671,12 @@
     if(it.mUser && it.margin>COMP_CAP) it.margin=COMP_CAP;             // 手動でも上限0.98
     var mg=Math.min((it.margin!=null?it.margin:0.93), COMP_CAP);
     var base=roundBuy(ref*mg); it.base=base;
-    // 上限: スニダン最安値 × 0.98（これを超えない）
     var minv=Number(it.min)||0;
-    var cap=roundBuy((minv>0?minv:ref)*COMP_CAP);
-    // 乖離ルール: スニダン最安値 と 競合平均 が ±10%以上 離れたら → 競合平均を採用（上限0.98）
+    // 乖離ルール: スニダン最安値 と 競合平均 が ±10%以上 離れたら → 競合平均をそのまま採用
+    //   上振れ(競合が高い)・下振れ(競合が安い)どちらも競合平均に合わせる。スニダン最安×0.98の上限は撤廃。
     var cavg=COMP_ADJUST? compAvg(it) : 0;
     if(cavg>0 && minv>0 && Math.abs(cavg-minv)/minv >= COMP_GAP){
       var mb=roundBuy(cavg);
-      if(mb>cap) mb=cap;                             // スニダン最安×0.98を超えない
       it.buy=mb; it.adjusted=true; it.adjDir=(mb<base?'down':'up'); it.effMargin=snapNear(mb/ref);
     } else {
       it.buy=base; it.adjusted=false; it.adjDir=''; it.effMargin=null;
