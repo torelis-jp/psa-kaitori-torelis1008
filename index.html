@@ -21,6 +21,8 @@
   .btn{border:0; border-radius:8px; padding:9px 15px; font-family:inherit; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap}
   .btn-main{background:var(--gold); color:#241c07}
   .btn-sub{background:#2a2a2a; color:var(--ink)}
+  .btn-x{background:#1d9bf0; color:#fff}
+  .xline textarea{flex:1; min-width:220px; background:#0b0b0b; color:#F7F4EC; border:1px solid #333; border-radius:8px; padding:8px 11px; font-family:inherit; font-size:13px; resize:vertical; line-height:1.4}
   .btn:active{transform:translateY(1px)}
   .lbl{font-size:12px; color:var(--muted); font-weight:700}
   .status{font-size:13px; color:#aaa}
@@ -508,6 +510,12 @@
       <button class="btn btn-sub" onclick="bgReset()">既定に戻す</button>
       <span style="flex:1"></span>
       <button class="btn btn-main" onclick="exportPng()">画像を保存</button>
+      <button class="btn btn-x" onclick="postToX()">Xにポスト</button>
+    </div>
+    <div class="line xline">
+      <span class="lbl">X投稿文</span>
+      <textarea id="xtext" rows="2" placeholder="X投稿画面に自動入力される固定文" oninput="saveXText(false)"></textarea>
+      <button class="btn btn-sub" onclick="saveXText(true)">保存</button>
     </div>
     <div id="status" class="status">スニダン用GASのURLを貼り、カード名で検索 → 「追加」でPSA10最安値を取得。乖離は手動上書き。</div>
   </div>
@@ -1147,6 +1155,49 @@
       document.fonts.load('400 24px "Dela Gothic One"')
     ]); await document.fonts.ready; }catch(e){}
   }
+  /* ===== X投稿文（サイト内で編集・保存：この端末に保存） ===== */
+  var XKEY='xpost_text_psa';
+  function defaultXText(){ return 'PSA10鑑定品の買取表です！\n#ポケカ #PSA10 #ポケモンカード買取 #トレリス草加店'; }
+  function loadXText(){ try{ var v=localStorage.getItem(XKEY); return v!=null?v:defaultXText(); }catch(e){ return defaultXText(); } }
+  function getXText(){ var t=document.getElementById("xtext"); return t&&t.value!=null? t.value : loadXText(); }
+  function saveXText(notify){ var t=document.getElementById("xtext"); if(!t) return; try{ localStorage.setItem(XKEY, t.value); }catch(e){} if(notify) setStatus("X投稿文を保存しました。"); }
+  (function(){ var t=document.getElementById("xtext"); if(t) t.value=loadXText(); })();
+  /* ===== Xにポスト（画像を自動でクリップボードにコピー＋X投稿画面を開く） ===== */
+  async function makeBoardBlob(){
+    document.body.classList.add("exporting");
+    try{
+      var imgEls=Array.prototype.slice.call(document.querySelectorAll("#rows img.thumb"));
+      for(var qi=0; qi<imgEls.length; qi++){
+        var el=imgEls[qi]; var cdn=el.getAttribute("data-cdn"); if(!cdn) continue;
+        var ok=false;
+        for(var attempt=0; attempt<2 && !ok; attempt++){
+          try{ var r=await jsonp(apiUrl(), {action:"img", url:cdn}); if(r && r.dataUri){ el.src=r.dataUri; try{if(el.decode) await el.decode();}catch(e){} cutoutThumb(el); try{if(el.decode) await el.decode();}catch(e){} ok=true; } }catch(e){}
+        }
+      }
+      await fontsReady(); fitGrid(); fitGrid(); fitPrices();
+      var board=document.getElementById("board");
+      var canvas=await html2canvas(board,{ scale:1, width:1240, height:1754, useCORS:true, backgroundColor:null, logging:false,
+        onclone:function(doc){ var cb=doc.getElementById("board"); if(cb){ cb.style.transform="none"; } } });
+      return await new Promise(function(res){ canvas.toBlob(res,"image/png"); });
+    } finally { document.body.classList.remove("exporting"); }
+  }
+  function postToX(){
+    if(!items.length){ setStatus("先にカードを追加してください。",true); return; }
+    var win=window.open("https://x.com/intent/post?text="+encodeURIComponent(getXText()), "_blank");
+    setStatus("画像を準備中…（完了したら貼り付けできます）");
+    var blobP=makeBoardBlob();
+    if(navigator.clipboard && window.ClipboardItem){
+      navigator.clipboard.write([ new ClipboardItem({ "image/png": blobP }) ]).then(function(){
+        setStatus("画像をクリップボードにコピーしました。開いたXの投稿画面で Ctrl+V（貼り付け）→ 投稿してください。");
+      }).catch(function(e){
+        blobP.then(function(b){ var a=document.createElement("a"); a.download='kaitori_psa_x.png'; a.href=URL.createObjectURL(b); a.click(); });
+        setStatus("自動コピーできなかったため画像を保存しました。Xの画面で画像を添付してください。",true);
+      });
+    } else {
+      blobP.then(function(b){ var a=document.createElement("a"); a.download='kaitori_psa_x.png'; a.href=URL.createObjectURL(b); a.click(); setStatus("画像を保存しました。開いたXの画面で画像を添付してください。"); });
+    }
+  }
+
   async function exportPng(){
     if(!items.length){ setStatus('先にカードを追加してください。',true); return; }
     setStatus('画像を生成中…（画像を変換中）');
